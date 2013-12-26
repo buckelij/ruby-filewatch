@@ -160,21 +160,31 @@ module FileWatch
           end
 
           @sincedb[@statcache[path]] = @files[path].pos
-        rescue Errno::EWOULDBLOCK, Errno::EINTR, EOFError
+	rescue EOFError
+          #update sincedb on EOF, or lose position on shutdown when no writes after :sincedb_write_interval
+          _sincedb_write_if_due
+	  break
+        rescue Errno::EWOULDBLOCK, Errno::EINTR
           break
         end
       end
 
       if changed
-        now = Time.now.to_i
-        delta = now - @sincedb_last_write
-        if delta >= @opts[:sincedb_write_interval]
-          @logger.debug("writing sincedb (delta since last write = #{delta})")
-          _sincedb_write
-          @sincedb_last_write = now
-        end
+        _sincedb_write_if_due
       end
     end # def _read_file
+
+    private
+    def _sincedb_write_if_due
+      now = Time.now.to_i
+      delta = now - @sincedb_last_write
+      if delta >= @opts[:sincedb_write_interval]
+        @logger.debug("writing sincedb (delta since last write = #{delta})")
+        _sincedb_write
+        @sincedb_last_write = now
+      end
+    end # def _sincdb_write_if_due
+
 
     public
     def sincedb_write(reason=nil)
